@@ -1,0 +1,26 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.28.0
+
+# Scheduler
+apscheduler>=3.10.0
+
+# Web application
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+
+# Document processing (RECOMMENDED - much better than vision models for invoices)
+pymupdf>=1.23.0           # PDF text extraction
+pillow>=10.0.0            # Image processing
+
+# OCR (OPTIONAL - requires tesseract installed on system)
+# pytesseract>=0.3.10     # pip install pytesseract
+# Also install: sudo apt-get install tesseract-ocr tesseract-ocr-por
+
+# AI features - Ollama (FREE, local) - RECOMMENDED
+ollama>=0.1.0
+
+# AI features - Anthropic (PAID, cloud) - OPTIONAL
+# anthropic>=0.18.0

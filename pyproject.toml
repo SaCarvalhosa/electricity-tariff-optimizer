@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "electricity-tariff-optimizer"
+version = "1.0.0"
+description = "Portuguese electricity tariff comparison and optimization tool"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Salvador Carvalhosa"}
+]
+keywords = ["electricity", "tariff", "portugal", "erse", "energy", "optimization"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Home Automation",
+    "Topic :: Office/Business :: Financial",
+]
+
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "requests>=2.28.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "python-multipart>=0.0.6",
+    "ollama>=0.1.0",
+]
+
+[project.optional-dependencies]
+pdf = ["pymupdf>=1.23.0"]
+ocr = ["pytesseract>=0.3.10", "pillow>=10.0.0"]
+anthropic = ["anthropic>=0.18.0"]
+scheduler = ["apscheduler>=3.10.0"]
+all = [
+    "pymupdf>=1.23.0",
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+    "anthropic>=0.18.0",
+    "apscheduler>=3.10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/SEU_USER/electricity-tariff-optimizer"
+Issues = "https://github.com/SEU_USER/electricity-tariff-optimizer/issues"
+
+[project.scripts]
+tariff-optimizer = "app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
