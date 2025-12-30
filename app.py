@@ -51,7 +51,7 @@ def check_ollama() -> dict:
             models = [m["name"] for m in r.json().get("models", [])]
             # Find vision model
             vision = ""
-            for vm in ["llava", "llava:latest", "llava:13b", "llama3.2-vision", "bakllava", "moondream"]:
+            for vm in ["llama3.2-vision:11b-instruct-q8_0", "llava", "llava:latest", "llava:13b", "llama3.2-vision", "bakllava", "moondream"]:
                 for m in models:
                     if vm.split(":")[0] in m:
                         vision = m
@@ -141,8 +141,10 @@ def parse_llm_response(text: str, best_provider: str, best_code: str, best_total
     ], text)
     
     cpe = find_value([
-        r'CPE[:\s]*(PT\d+)',
-        r'(PT0002\d+)',
+        r'CPE[:\s]*(PT\d+[A-Za-z]*)',           # CPE: PT0002...JC
+        r'CPE[^:]*?:\s*(PT\d+[A-Za-z]*)',        # CPE code: PT0002...
+        r'(PT0002\d{12,16}[A-Za-z]{0,2})',       # PT0002 + 12-16 digits + optional letters
+        r'(PT\d{16,20}[A-Za-z]{0,2})',           # PT + 16-20 digits + optional letters
     ], text)
     
     power = find_value([
@@ -280,17 +282,26 @@ Contacto: [o seu email/telefone]"""
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF using pymupdf (fitz)."""
+    """Extract text from PDF using pypdf (BSD license)."""
     try:
-        import fitz  # pymupdf
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(pdf_bytes))
         text = ""
-        for page in doc:
-            text += page.get_text()
-        doc.close()
+        for page in reader.pages:
+            text += page.extract_text() or ""
         return text.strip()
     except ImportError:
-        return ""
+        # Fallback to pymupdf if available
+        try:
+            import fitz  # pymupdf
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            text = ""
+            for page in doc:
+                text += page.get_text()
+            doc.close()
+            return text.strip()
+        except ImportError:
+            return ""
     except Exception as e:
         return ""
 
@@ -390,8 +401,7 @@ Se não encontrares algum campo, escreve "N/A"."""
     power = extract_field(response_text, "POTENCIA")
     total = extract_field(response_text, "TOTAL")
     
-    # Use parse_llm_response to generate email and comparison
-    # But we'll build our own result with the extracted data
+    # Use parse_llm_response to get comparison and recommendation
     result = parse_llm_response(response_text, best_provider, best_code, best_total)
     
     # Override with our cleaner extraction
@@ -403,6 +413,70 @@ Se não encontrares algum campo, escreve "N/A"."""
         "contracted_power": power or "Não identificado",
         "total_amount_eur": total or "Não identificado",
     }
+    
+    # REGENERATE email with correctly extracted values
+    # Check if current tariff is cheaper
+    is_cheaper = None
+    if total and best_total > 0:
+        try:
+            current_val = float(total.replace(',', '.').replace('€', '').strip())
+            if current_val > 0:
+                is_cheaper = (current_val - best_total) > 0
+        except:
+            pass
+    
+    if is_cheaper == False:
+        # Current tariff is better
+        result["email_draft"] = f"""⚠️ NOTA: A sua fatura atual ({total}€) parece ser mais competitiva que esta oferta ({best_total:.2f}€/mês).
+Verifique se o consumo corresponde ao período analisado.
+
+Se mesmo assim quiser pedir informações:
+
+---
+
+Assunto: Pedido de Informação - Oferta {best_code}
+
+Exmo(a) Senhor(a),
+
+Venho por este meio solicitar informações sobre a oferta {best_code} da {best_provider}.
+
+Atualmente sou cliente da {provider or '[fornecedor atual]'} e gostaria de comparar as condições.
+
+Os meus dados são:
+
+Nome: {customer or '[o seu nome]'}
+NIF: {nif or '[o seu NIF]'}
+CPE: {cpe or '[o seu código CPE]'}
+Potência contratada: {power or '[potência atual]'}
+
+Agradeço o envio de informação detalhada.
+
+Com os melhores cumprimentos,
+{customer or '[o seu nome]'}"""
+    else:
+        result["email_draft"] = f"""Assunto: Pedido de Adesão - Oferta {best_code}
+
+Exmo(a) Senhor(a),
+
+Venho por este meio manifestar o meu interesse em aderir à oferta {best_code} da {best_provider}.
+
+Atualmente sou cliente da {provider or '[fornecedor atual]'} e pretendo efetuar a mudança de fornecedor de eletricidade para a vossa empresa.
+
+Os meus dados para o processo de mudança são:
+
+Nome: {customer or '[o seu nome]'}
+NIF: {nif or '[o seu NIF]'}
+CPE: {cpe or '[o seu código CPE - consulte a sua fatura atual]'}
+Potência contratada: {power or '[potência atual]'}
+Morada de fornecimento: [a sua morada]
+
+Agradeço que me contactem para finalizar o processo de adesão e esclarecer quaisquer dúvidas sobre a mudança.
+
+Com os melhores cumprimentos,
+{customer or '[o seu nome]'}
+
+Contacto: [o seu email/telefone]"""
+    
     result["llm"] = llm_used + " (texto)"
     
     return result
@@ -438,12 +512,12 @@ def analyze_receipt_with_llm(image_data: bytes, media_type: str, best_tariff: di
     if not status["vision_available"]:
         # No vision model and text extraction failed
         if media_type == "application/pdf":
-            return {"success": False, "error": "Instale pymupdf para PDFs: pip install pymupdf"}
+            return {"success": False, "error": "Instale pypdf para PDFs: pip install pypdf"}
         return {"success": False, "error": "Instale pytesseract para OCR ou um modelo de visão: ollama pull llava"}
     
     # Vision models don't support PDF
     if media_type == "application/pdf":
-        return {"success": False, "error": "PDFs requerem pymupdf. Instale: pip install pymupdf"}
+        return {"success": False, "error": "PDFs requerem pypdf. Instale: pip install pypdf"}
     
     if media_type not in ["image/jpeg", "image/png", "image/jpg", "image/webp"]:
         return {"success": False, "error": f"Formato não suportado: {media_type}. Use JPG, PNG ou PDF."}
@@ -794,7 +868,92 @@ O preço médio é de {best_avg:.4f}€/kWh. O processo de mudança é gratuito 
 # SCORING LOGIC
 # ============================================================
 
+def read_load_file(content: bytes, filename: str = "") -> pd.DataFrame:
+    """Read consumption data from CSV or Excel (e-Redes format)."""
+    
+    # Check if it's an Excel file (by magic bytes or filename)
+    is_excel = content[:4] == b'PK\x03\x04' or filename.lower().endswith(('.xlsx', '.xls'))
+    
+    if is_excel:
+        return read_eredes_excel(content)
+    else:
+        return read_load_csv(content)
+
+
+def read_eredes_excel(content: bytes) -> pd.DataFrame:
+    """Read e-Redes Excel export format."""
+    try:
+        # e-Redes format has metadata in first rows, data starts after row 7
+        # First, read to find the header row
+        df_preview = pd.read_excel(io.BytesIO(content), nrows=10, header=None)
+        
+        # Find the row with "Data" and "Hora" headers
+        header_row = 7  # Default for e-Redes format
+        for i, row in df_preview.iterrows():
+            if 'Data' in str(row.values) and 'Hora' in str(row.values):
+                header_row = i
+                break
+        
+        # Read the actual data
+        df = pd.read_excel(io.BytesIO(content), skiprows=header_row)
+        
+        # Clean column names (remove unnamed)
+        df.columns = [str(c).strip() for c in df.columns]
+        
+        # Find the relevant columns
+        date_col = next((c for c in df.columns if 'data' in c.lower()), df.columns[0])
+        time_col = next((c for c in df.columns if 'hora' in c.lower()), df.columns[1])
+        
+        # Find power/energy column - e-Redes uses kW (power), not kWh
+        power_col = None
+        for c in df.columns:
+            cl = c.lower()
+            if 'consumo' in cl or 'kw' in cl or 'energia' in cl or 'energy' in cl:
+                power_col = c
+                break
+        if not power_col:
+            power_col = df.columns[2]
+        
+        # Drop header row if it got included
+        df = df[df[date_col].astype(str).str.match(r'\d{4}[/-]\d{2}[/-]\d{2}', na=False)]
+        
+        # Combine date and time into timestamp
+        df["timestamp"] = pd.to_datetime(
+            df[date_col].astype(str) + ' ' + df[time_col].astype(str),
+            format='mixed',
+            dayfirst=False,
+            errors='coerce'
+        )
+        
+        # Convert power (kW) to energy (kWh)
+        # e-Redes uses 15-minute intervals, so kWh = kW * 0.25
+        df["power_kw"] = pd.to_numeric(df[power_col].astype(str).str.replace(",", "."), errors="coerce")
+        
+        # Detect interval from data
+        df = df.dropna(subset=["timestamp", "power_kw"]).sort_values("timestamp")
+        if len(df) >= 2:
+            intervals = df["timestamp"].diff().dt.total_seconds().dropna()
+            interval_seconds = intervals.median()
+            interval_hours = interval_seconds / 3600  # Convert to hours
+        else:
+            interval_hours = 0.25  # Default 15 minutes
+        
+        df["energy_kwh"] = df["power_kw"] * interval_hours
+        
+        result = df[["timestamp", "energy_kwh"]].set_index("timestamp").sort_index()
+        try:
+            result.index = result.index.tz_localize("Europe/Lisbon", ambiguous="infer", nonexistent="shift_forward")
+        except:
+            pass
+        
+        return result
+        
+    except Exception as e:
+        raise ValueError(f"Erro ao ler ficheiro Excel e-Redes: {e}")
+
+
 def read_load_csv(content: bytes) -> pd.DataFrame:
+    """Read consumption data from CSV."""
     for sep in [",", ";", "\t"]:
         try:
             df = pd.read_csv(io.BytesIO(content), sep=sep)
@@ -1007,10 +1166,10 @@ async def home():
     default_link = '<p style="margin-top:15px;color:#666">💡 Ou <a href="/use-default" style="color:#667eea">usar load.csv existente</a></p>' if DEFAULT_LOAD_PATH.exists() else ""
     
     content = f'''{stats_html}
-    <div class="card"><h2>📁 Carregar Consumo</h2><p>CSV com timestamp e kWh</p>
+    <div class="card"><h2>📁 Carregar Consumo</h2><p>CSV ou Excel e-Redes (.xlsx)</p>
     <form action="/upload" method="post" enctype="multipart/form-data">
     <div class="upload" onclick="document.getElementById('f').click()"><p style="font-size:3em;margin:0">📄</p><p>Clique para selecionar</p>
-    <input type="file" id="f" name="file" accept=".csv" required onchange="document.getElementById('btn').disabled=false;document.getElementById('fn').textContent=this.files[0].name" style="display:none"></div>
+    <input type="file" id="f" name="file" accept=".csv,.xlsx,.xls" required onchange="document.getElementById('btn').disabled=false;document.getElementById('fn').textContent=this.files[0].name" style="display:none"></div>
     <p id="fn" style="margin:10px 0;color:#667eea;font-weight:500"></p>
     <button type="submit" id="btn" class="btn" disabled>Analisar</button></form>{default_link}</div>
     
@@ -1028,15 +1187,15 @@ async def home():
 async def use_default():
     if not DEFAULT_LOAD_PATH.exists():
         return HTMLResponse(html('<div class="card"><h2>❌ Erro</h2><p>load.csv não encontrado</p><a href="/" class="btn">← Voltar</a></div>'))
-    return await process_load(DEFAULT_LOAD_PATH.read_bytes())
+    return await process_load(DEFAULT_LOAD_PATH.read_bytes(), str(DEFAULT_LOAD_PATH))
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
-    return await process_load(await file.read())
+    return await process_load(await file.read(), file.filename or "")
 
-async def process_load(content: bytes):
+async def process_load(content: bytes, filename: str = ""):
     try:
-        df = read_load_csv(content)
+        df = read_load_file(content, filename)
         if df.empty: raise ValueError("Ficheiro vazio")
         
         # Get original stats before normalization
@@ -1162,13 +1321,13 @@ async def ai_page():
         <div class="email" id="email">{email}</div></div>'''
     
     vision_warn = "" if status["vision_available"] else '<div class="alert alert-warn">⚠️ Instale modelo de visão: <code>ollama pull llava</code></div>'
-    # Check if pymupdf is available for PDF support
+    # Check if pypdf is available for PDF support
     try:
-        import fitz
+        from pypdf import PdfReader
         pdf_support = True
     except ImportError:
         pdf_support = False
-    pdf_msg = '<p style="color:#4caf50;font-size:0.9em">✅ PDFs suportados (extração de texto)</p>' if pdf_support else '<p style="color:#ff9800;font-size:0.9em">⚠️ Para PDFs instale: pip install pymupdf</p>'
+    pdf_msg = '<p style="color:#4caf50;font-size:0.9em">✅ PDFs suportados (extração de texto)</p>' if pdf_support else '<p style="color:#ff9800;font-size:0.9em">⚠️ Para PDFs instale: pip install pypdf</p>'
     
     content = f'''<div class="best"><h2>🏆 Melhor: {best["provider"]} - {best["total_eur"]:.2f}€</h2><p>{best["kind_label"]} | {best["power_kva"]} kVA | {s["days"]} dias</p></div>
     {prev}

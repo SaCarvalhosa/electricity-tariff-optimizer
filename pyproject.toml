@@ -7,7 +7,7 @@ name = "electricity-tariff-optimizer"
 version = "1.0.0"
 description = "Portuguese electricity tariff comparison and optimization tool"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "EUPL-1.2"}
 requires-python = ">=3.10"
 authors = [
     {name = "Salvador Carvalhosa"}
@@ -16,7 +16,7 @@ keywords = ["electricity", "tariff", "portugal", "erse", "energy", "optimization
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -37,7 +37,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-pdf = ["pymupdf>=1.23.0"]
+pdf = ["pypdf>=4.0.0"]
 ocr = ["pytesseract>=0.3.10", "pillow>=10.0.0"]
 anthropic = ["anthropic>=0.18.0"]
 scheduler = ["apscheduler>=3.10.0"]

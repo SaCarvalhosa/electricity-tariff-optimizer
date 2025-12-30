@@ -4,7 +4,7 @@ Uma aplicação web para comparar e otimizar tarifas de eletricidade em Portugal
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)
 
 ## ✨ Funcionalidades
 
@@ -67,6 +67,15 @@ Abra http://localhost:8000 no browser.
 
 ### Carregar Dados de Consumo
 
+A aplicação suporta dois formatos:
+
+**1. Ficheiro Excel e-Redes (recomendado)**
+- Exporte os seus consumos de [E-REDES Balcão Digital](https://balcaodigital.e-redes.pt/)
+- Formato automático com 15 minutos de intervalo
+- O ficheiro é convertido automaticamente para kWh
+
+**2. Ficheiro CSV manual**
+
 O ficheiro CSV deve ter duas colunas:
 - `timestamp`: Data/hora (formato ISO ou DD/MM/YYYY HH:MM)
 - `kWh`: Consumo em kWh
@@ -78,8 +87,6 @@ timestamp,kWh
 2024-01-01 01:00,0.189
 2024-01-01 02:00,0.156
 ```
-
-> 💡 **Dica**: Pode exportar estes dados da sua conta [E-REDES](https://balcaodigital.e-redes.pt/) ou do portal do seu comercializador.
 
 ### Análise de Faturas
 
@@ -212,7 +219,7 @@ Contribuições são bem-vindas! Por favor:
 
 ## 📝 Licença
 
-Este projeto está licenciado sob a [MIT License](LICENSE).
+Este projeto está licenciado sob a [European Union Public Licence v. 1.2 (EUPL-1.2)](LICENSE).
 
 ## ⚠️ Aviso Legal
 
