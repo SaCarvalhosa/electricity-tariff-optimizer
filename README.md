@@ -52,7 +52,7 @@ ollama pull llama3.1:70b
 ### 5. (Opcional) Suporte a PDFs
 
 ```bash
-pip install pymupdf
+pip install pypdf
 ```
 
 ### 6. Execute a aplicação
